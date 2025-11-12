@@ -6,6 +6,6 @@ fn main() -> io::Result<()> {
     io::stdout().flush()?;
     let mut buffer = String::new();
     io::stdin().read_line(&mut buffer)?;
-    println!("{}: command not found", buffer);
+    println!("{}: command not found", buffer.trim());
     Ok(())
 }

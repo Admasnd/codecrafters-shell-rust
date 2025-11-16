@@ -15,6 +15,8 @@ fn read_input(buffer: &mut String) -> io::Result<()> {
     Ok(())
 }
 
+const BUILTINS: [&'static str; 3] = ["echo", "exit", "type"];
+
 fn eval_input(buffer: &mut String) -> Result<Option<u8>, Box<dyn Error>> {
     let cmd: Vec<_> = buffer.trim().splitn(2, ' ').collect();
     match &cmd[..] {
@@ -26,6 +28,15 @@ fn eval_input(buffer: &mut String) -> Result<Option<u8>, Box<dyn Error>> {
             Ok(exit_code) => Ok(Some(exit_code)),
             Err(_) => Ok(None),
         },
+        ["type", arg] => {
+            if BUILTINS.contains(&arg) {
+                println!("{} is a shell builtin", arg);
+                Ok(None)
+            } else {
+                println!("{}: not found", arg);
+                Ok(None)
+            }
+        }
         _ => {
             println!("{}: command not found", buffer.trim());
             Ok(None)
@@ -42,7 +53,6 @@ fn repl() -> Result<u8, Box<dyn Error>> {
         if let Some(exit_code) = result {
             return Ok(exit_code);
         }
-
         buffer.clear();
     }
 }

@@ -18,6 +18,10 @@ fn read_input(buffer: &mut String) -> io::Result<()> {
 fn eval_input(buffer: &mut String) -> Result<Option<u8>, Box<dyn Error>> {
     let cmd: Vec<_> = buffer.trim().splitn(2, ' ').collect();
     match &cmd[..] {
+        ["echo", args] => {
+            println!("{}", args);
+            Ok(None)
+        }
         ["exit", n] => match n.parse::<u8>() {
             Ok(exit_code) => Ok(Some(exit_code)),
             Err(_) => Ok(None),

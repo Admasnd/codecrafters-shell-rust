@@ -26,11 +26,8 @@ fn builtin_echo(text: &str) -> Result<Option<u8>, Box<dyn Error>> {
     Ok(None)
 }
 
-fn builtin_exit(arg: &str) -> Result<Option<u8>, Box<dyn Error>> {
-    match arg.parse::<u8>() {
-        Ok(exit_code) => Ok(Some(exit_code)),
-        Err(_) => Ok(None),
-    }
+fn builtin_exit() -> Result<Option<u8>, Box<dyn Error>> {
+    Ok(Some(0))
 }
 
 fn builtin_type(arg: &str) -> Result<Option<u8>, Box<dyn Error>> {
@@ -91,7 +88,7 @@ fn eval_input(buffer: &str) -> Result<Option<u8>, Box<dyn Error>> {
     let cmd: Vec<_> = buffer.trim().splitn(2, ' ').collect();
     match &cmd[..] {
         ["echo", args] => builtin_echo(&args),
-        ["exit", arg] => builtin_exit(&arg),
+        ["exit"] => builtin_exit(),
         ["type", arg] => builtin_type(&arg),
         _ => {
             println!("{}: command not found", buffer.trim());

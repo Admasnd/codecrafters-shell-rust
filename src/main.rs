@@ -1,11 +1,11 @@
 // #[allow(unused_imports)]
+use anyhow::anyhow;
+use anyhow::Result;
 use std::env;
-use std::error::Error;
 use std::fs;
 use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
-use std::process::ExitCode;
-use std::result::Result;
+use std::process::{Command, ExitCode};
 
 fn print_prompt() -> io::Result<()> {
     print!("$ ");
@@ -21,75 +21,104 @@ fn read_input(buffer: &mut String) -> io::Result<()> {
     Ok(())
 }
 
-fn builtin_echo(text: &str) -> Result<Option<u8>, Box<dyn Error>> {
+fn builtin_echo(text: &str) -> Result<Option<u8>> {
     println!("{}", text);
     Ok(None)
 }
 
-fn builtin_exit() -> Result<Option<u8>, Box<dyn Error>> {
+fn builtin_exit() -> Result<Option<u8>> {
     Ok(Some(0))
 }
 
-fn builtin_type(arg: &str) -> Result<Option<u8>, Box<dyn Error>> {
-    let builtins = ["echo", "exit", "type"];
-    let num_args = arg.split(' ').count();
-    if num_args > 1 {
-        println!("type given more than one argument: {}", arg);
-        return Ok(None);
-    }
-    if builtins.contains(&arg) {
-        println!("{} is a shell builtin", arg);
-        Ok(None)
-    } else {
-        match env::var_os("PATH") {
-            Some(paths) => {
-                for path in env::split_paths(&paths) {
-                    // check if executable exists
-                    let exec_path = format!("{}/{}", path.display(), arg);
-                    let does_exists = fs::exists(&exec_path)?;
-                    if !does_exists {
-                        continue;
-                    }
-                    // check if has execute permission
-                    let perms = fs::metadata(&exec_path)?.permissions().mode();
-                    /* 0o represents octal notation where each digit is 0-7.
-                     * Each octal digit represents a permission.
-                     * - 4 = read
-                     * - 2 = write
-                     * - 1 = execute
-                     * The first digit represents the owner permission.
-                     * The second digit represents the group permission.
-                     * The third digit represents the other permission.
-                     * Using bitwise and `&` with 0o111 isolates the write permissions by clearing
-                     * the other permission bits (i.e., setting them to 0).
-                     */
-                    let can_exec = (perms & 0o111) != 0;
-                    if !can_exec {
-                        continue;
-                    }
-                    // executable found
-                    println!("{} is {}", arg, exec_path);
-                    return Ok(None);
+fn get_exec_path(arg: &str) -> Result<String> {
+    match env::var_os("PATH") {
+        Some(paths) => {
+            for path in env::split_paths(&paths) {
+                // check if executable exists
+                let exec_path = format!("{}/{}", path.display(), arg);
+                let does_exists = fs::exists(&exec_path)?;
+                if !does_exists {
+                    continue;
                 }
-                // executable not found in any path
-                println!("{}: not found", arg);
-                Ok(None)
+                // check if has execute permission
+                let perms = fs::metadata(&exec_path)?.permissions().mode();
+                /* 0o represents octal notation where each digit is 0-7.
+                 * Each octal digit represents a permission.
+                 * - 4 = read
+                 * - 2 = write
+                 * - 1 = execute
+                 * The first digit represents the owner permission.
+                 * The second digit represents the group permission.
+                 * The third digit represents the other permission.
+                 * Using bitwise and `&` with 0o111 isolates the write permissions by clearing
+                 * the other permission bits (i.e., setting them to 0).
+                 */
+                let can_exec = (perms & 0o111) != 0;
+                if !can_exec {
+                    continue;
+                }
+                // executable found
+                return Ok(path.display().to_string());
             }
-            None => {
-                // PATH not set so no executable can be found
-                println!("{}: not found", arg);
-                Ok(None)
-            }
+            // executable not found in any path
+            Err(anyhow!("{}: not found", arg))
+        }
+        None => {
+            // PATH not set so no executable can be found
+            Err(anyhow!("{}: not found", arg))
         }
     }
 }
 
-fn eval_input(buffer: &str) -> Result<Option<u8>, Box<dyn Error>> {
-    let cmd: Vec<_> = buffer.trim().splitn(2, ' ').collect();
-    match &cmd[..] {
-        ["echo", args] => builtin_echo(&args),
-        ["exit"] => builtin_exit(),
-        ["type", arg] => builtin_type(&arg),
+fn builtin_type(args: &[&str]) -> Result<Option<u8>> {
+    let builtins = ["echo", "exit", "type"];
+    match &args[..] {
+        [arg] => {
+            if builtins.contains(arg) {
+                println!("{} is a shell builtin", arg);
+                Ok(None)
+            } else {
+                match get_exec_path(&arg) {
+                    Ok(path) => {
+                        println!("{} is {}", arg, path);
+                        Ok(None)
+                    }
+                    Err(err) => {
+                        println!("{err}");
+                        Ok(None)
+                    }
+                }
+            }
+        }
+        _ => {
+            println!("type: invalid number of arguments");
+            Ok(None)
+        }
+    }
+}
+
+fn exec_program(cmd: &str, args: &[&str]) -> Result<Option<u8>> {
+    let output = Command::new(&cmd).args(args).output()?;
+    io::stdout().write_all(&output.stdout)?;
+    Ok(None)
+}
+
+fn eval_input(buffer: &str) -> Result<Option<u8>> {
+    let mut args = buffer.trim().split(' ');
+    match args.next() {
+        Some("echo") => builtin_echo(&args.collect::<Vec<_>>().join(" ")),
+        Some("exit") => builtin_exit(),
+        Some("type") => builtin_type(&args.collect::<Vec<_>>()),
+        Some(cmd) => match get_exec_path(cmd) {
+            Ok(path) => {
+                let exec_path = format!("{}/{}", path, cmd);
+                exec_program(&exec_path, &args.collect::<Vec<_>>())
+            }
+            Err(_) => {
+                println!("{}: command not found", buffer.trim());
+                Ok(None)
+            }
+        },
         _ => {
             println!("{}: command not found", buffer.trim());
             Ok(None)
@@ -97,7 +126,7 @@ fn eval_input(buffer: &str) -> Result<Option<u8>, Box<dyn Error>> {
     }
 }
 
-fn repl() -> Result<u8, Box<dyn Error>> {
+fn repl() -> Result<u8> {
     let mut buffer = String::new();
     loop {
         print_prompt()?;

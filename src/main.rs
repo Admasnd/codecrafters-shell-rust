@@ -1,7 +1,9 @@
+// #[allow(unused_imports)]
 use std::env;
 use std::error::Error;
-#[allow(unused_imports)]
+use std::fs;
 use std::io::{self, Write};
+use std::os::unix::fs::PermissionsExt;
 use std::process::ExitCode;
 use std::result::Result;
 
@@ -33,13 +35,55 @@ fn builtin_exit(arg: &str) -> Result<Option<u8>, Box<dyn Error>> {
 
 fn builtin_type(arg: &str) -> Result<Option<u8>, Box<dyn Error>> {
     let builtins = ["echo", "exit", "type"];
+    let num_args = arg.split(' ').count();
+    if num_args > 1 {
+        println!("type given more than one argument: {}", arg);
+        return Ok(None);
+    }
     if builtins.contains(&arg) {
         println!("{} is a shell builtin", arg);
         Ok(None)
     } else {
-        // TODO use env::var(PATH) to check for executables
-        println!("{}: not found", arg);
-        Ok(None)
+        match env::var_os("PATH") {
+            Some(paths) => {
+                for path in env::split_paths(&paths) {
+                    // check if executable exists
+                    let exec_path = format!("{}/{}", path.display(), arg);
+                    let does_exists = fs::exists(&exec_path)?;
+                    if !does_exists {
+                        continue;
+                    }
+                    // check if has execute permission
+                    let perms = fs::metadata(&exec_path)?.permissions().mode();
+                    /* 0o represents octal notation where each digit is 0-7.
+                     * Each octal digit represents a permission.
+                     * - 4 = read
+                     * - 2 = write
+                     * - 1 = execute
+                     * The first digit represents the owner permission.
+                     * The second digit represents the group permission.
+                     * The third digit represents the other permission.
+                     * Using bitwise and `&` with 0o111 isolates the write permissions by clearing
+                     * the other permission bits (i.e., setting them to 0).
+                     */
+                    let can_exec = (perms & 0o111) != 0;
+                    if !can_exec {
+                        continue;
+                    }
+                    // executable found
+                    println!("{} is {}", arg, exec_path);
+                    return Ok(None);
+                }
+                // executable not found in any path
+                println!("{}: not found", arg);
+                Ok(None)
+            }
+            None => {
+                // PATH not set so no executable can be found
+                println!("{}: not found", arg);
+                Ok(None)
+            }
+        }
     }
 }
 

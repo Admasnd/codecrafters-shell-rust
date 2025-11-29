@@ -110,10 +110,7 @@ fn eval_input(buffer: &str) -> Result<Option<u8>> {
         Some("exit") => builtin_exit(),
         Some("type") => builtin_type(&args.collect::<Vec<_>>()),
         Some(cmd) => match get_exec_path(cmd) {
-            Ok(path) => {
-                let exec_path = format!("{}/{}", path, cmd);
-                exec_program(&exec_path, &args.collect::<Vec<_>>())
-            }
+            Ok(_) => exec_program(&cmd, &args.collect::<Vec<_>>()),
             Err(_) => {
                 println!("{}: command not found", buffer.trim());
                 Ok(None)

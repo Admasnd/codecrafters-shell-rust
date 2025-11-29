@@ -80,7 +80,7 @@ fn builtin_type(args: &[&str]) -> Result<Option<u8>> {
             } else {
                 match get_exec_path(&arg) {
                     Ok(path) => {
-                        println!("{} is {}", arg, path);
+                        println!("{0} is {1}/{0}", arg, path);
                         Ok(None)
                     }
                     Err(err) => {

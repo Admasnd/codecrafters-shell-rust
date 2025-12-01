@@ -77,7 +77,7 @@ fn get_exec_path(arg: &str) -> Result<String> {
 }
 
 fn builtin_type(args: &[&str]) -> Result<Option<u8>> {
-    let builtins = ["echo", "exit", "type"];
+    let builtins = ["echo", "exit", "pwd", "type"];
     match &args[..] {
         [arg] => {
             if builtins.contains(arg) {

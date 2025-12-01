@@ -30,6 +30,12 @@ fn builtin_exit() -> Result<Option<u8>> {
     Ok(Some(0))
 }
 
+fn builtin_pwd() -> Result<Option<u8>> {
+    let path = env::current_dir()?;
+    println!("{}", path.display());
+    Ok(None)
+}
+
 fn get_exec_path(arg: &str) -> Result<String> {
     match env::var_os("PATH") {
         Some(paths) => {
@@ -109,6 +115,7 @@ fn eval_input(buffer: &str) -> Result<Option<u8>> {
         Some("echo") => builtin_echo(&args.collect::<Vec<_>>().join(" ")),
         Some("exit") => builtin_exit(),
         Some("type") => builtin_type(&args.collect::<Vec<_>>()),
+        Some("pwd") => builtin_pwd(),
         Some(cmd) => match get_exec_path(cmd) {
             Ok(_) => exec_program(&cmd, &args.collect::<Vec<_>>()),
             Err(_) => {
